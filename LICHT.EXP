@@ -20,7 +20,6 @@ VAR_INPUT CONSTANT
 	AFTERRUN_BLINK_LOW:TIME:= t#500ms;
 	AFTERRUN_BLINK_HIGH:TIME := t#1500ms;
 	AFTERRUN_NUMBER_OF_PULSES : BYTE := 3;
-	RETRIGGER_ON_TIME_AS_STATE : BOOL := FALSE; (* set to true if the input state should be evaluated rather than the rising edge *)
 END_VAR
 VAR_OUTPUT
 	POWER:BOOL;
@@ -30,7 +29,6 @@ VAR
 	zustand_en:lichtZustand_ten :=LICHT_ZUSTAND_AUS;
 	tasterPosEdge : R_TRIG;
 	tasterLongPress : TON;
-	retriggerOnTimeEdge : R_TRIG;
  	einPosEdge : R_TRIG;
 	einLongPress : TON;
 	ausSofortEdge : R_TRIG;
@@ -47,14 +45,13 @@ END_VAR
 tasterPosEdge(CLK := TASTER );
 tasterLongPress(IN := TASTER, PT := t#500ms );
 
-retriggerOnTimeEdge(CLK := RETRIGGER_ON_TIME);
 einPosEdge(CLK := EIN );
 einLongPress(IN := EIN, PT := t#500ms );
 ausSofortEdge(CLK := AUS_SOFORT );
 ausMitAnkuendigungEdge(CLK := AUS_MIT_ANGEKUENDIGUNG );
 afterrunTimer(IN := (LICHT_ZUSTAND_AUSSCHALT_WARNUNG = zustand_en), PT := AFTERRUN_TIME );
 
-IF retriggerOnTimeEdge.Q OR (RETRIGGER_ON_TIME AND RETRIGGER_ON_TIME_AS_STATE) THEN
+IF RETRIGGER_ON_TIME THEN
 	tonTimer(IN := 0, PT := ON_TIME );
 ELSIF (LICHT_ZUSTAND_EIN_ZEITBEGRENZT = zustand_en) THEN
 	 tonTimer(IN := 1, PT := ON_TIME );
@@ -103,7 +100,7 @@ CASE (zustand_en) OF
 
 	LICHT_ZUSTAND_AUSSCHALT_WARNUNG:
 		(* Leaving afterrun with EIN pulse is probably a bad idea as it is not visible but what's the option? *)
-		IF ((TRUE = tasterPosEdge.Q) OR (TRUE = einPosEdge.Q) OR (TRUE = retriggerOnTimeEdge.Q)) THEN
+		IF ((TRUE = tasterPosEdge.Q) OR (TRUE = einPosEdge.Q) OR RETRIGGER_ON_TIME) THEN
 			tonTimer(IN := 0);
 			blinker(ENABLE:=FALSE);
 			blinkCounter(RESET:=TRUE);
@@ -129,6 +126,7 @@ END_CASE;
 
 (* Author: MacPiper
 Changelog:
+03.10.24 ver 1.6 Removed rising edge handing for RETRIGGER_ON_TIME, support handling of state only. Removed RETRIGGER_ON_TIME_AS_STATE parameter
 03.10.24 ver 1.5 fixed RETRIGGER_ON_TIME rising edge handling, it was evaluating the state instead, independant from RETRIGGER_ON_TIME_AS_STATE parameter
 12.05.20 ver 1.4 Added functionality for longtime-activation through doubleclick (set parameter DOUBLE_CLICK_DAUER_ACTIVATION to TRUE to enable it)
 26.04.17 ver 1.3 Added parameter RETRIGGER_ON_TIME_AS_STATE. When set, the timer starts to run only when the input is RETRIGGER_ON_TIME low
