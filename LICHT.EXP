@@ -2,6 +2,7 @@
 
 (* @NESTEDCOMMENTS := 'Yes' *)
 (* @PATH := '\/Funktionsbloecke' *)
+(* @OBJECTFLAGS := '0, 8' *)
 (* @SYMFILEFLAGS := '2048' *)
 FUNCTION_BLOCK LICHT
 VAR_INPUT
@@ -16,6 +17,9 @@ VAR_INPUT CONSTANT
 	ON_TIME:TIME := t#30m;
 	ON_TIME_DAUER:TIME := t#12h;
 	AFTERRUN_TIME:TIME := t#15s;
+	AFTERRUN_BLINK_LOW:TIME:= t#500ms;
+	AFTERRUN_BLINK_HIGH:TIME := t#1500ms;
+	AFTERRUN_NUMBER_OF_PULSES : BYTE := 3;
 END_VAR
 VAR_OUTPUT
 	POWER:BOOL;
@@ -23,6 +27,7 @@ VAR_OUTPUT
 END_VAR
 VAR
 	zustand_en:lichtZustand_ten :=LICHT_ZUSTAND_AUS;
+
 	tasterPosEdge : R_TRIG;
 	tasterLongPress : TON;
 	retriggerOnTimeEdge : R_TRIG;
@@ -30,10 +35,12 @@ VAR
 	einLongPress : TON;
 	ausSofortEdge : R_TRIG;
 	ausMitAnkuendigungEdge : R_TRIG;
+
 	tonTimer : TON;
-	blinkPulse : CLK_PULSE;
-	ausschaltPhase: BYTE := 0;
-       afterrunTimer : TON;
+      afterrunTimer : TON;
+
+	blinker : BLINK;
+	blinkCounter : CTU := (CU:=TRUE, RESET:=TRUE, M:=TRUE); (* without this initialisation it would detect a pos. edge at first cycle with CU = TRUE *)
 END_VAR
 (* @END_DECLARATION := '0' *)
 tasterPosEdge(CLK := TASTER );
@@ -64,7 +71,9 @@ CASE (zustand_en) OF
 		POWER_NO_BLINK := FALSE;
 
 	LICHT_ZUSTAND_EIN_ZEITBEGRENZT:
-		IF ( (TRUE = tasterPosEdge.Q) OR (TRUE = ausSofortEdge.Q) ) THEN
+		IF (TRUE = einPosEdge.Q) THEN
+			tonTimer(IN := 0, PT := ON_TIME );
+		ELSIF ( (TRUE = tasterPosEdge.Q) OR (TRUE = ausSofortEdge.Q) ) THEN
 			zustand_en := LICHT_ZUSTAND_AUS;
 		ELSIF ((TRUE = tasterLongPress.Q)  OR (TRUE = einLongPress.Q) OR (t#0s = ON_TIME)) THEN
 			zustand_en := LICHT_ZUSTAND_EIN_DAUER;
@@ -84,21 +93,26 @@ CASE (zustand_en) OF
 		POWER_NO_BLINK := TRUE;
 
 	LICHT_ZUSTAND_AUSSCHALT_WARNUNG:
-		blinkPulse(PT := t#250ms,N :=10, rst:=0);
 		(* Leaving afterrun with EIN pulse is probably a bad idea as it is not visible but what's the option? *)
 		IF ((TRUE = tasterPosEdge.Q) OR (TRUE = einPosEdge.Q) OR (TRUE = retriggerOnTimeEdge.Q)) THEN
-			tonTimer(IN := 0, PT := ON_TIME );
-			blinkPulse(PT := t#250ms,N :=10, rst:=1);
+			tonTimer(IN := 0);
+			blinker(ENABLE:=FALSE);
+			blinkCounter(RESET:=TRUE);
+
 			zustand_en := LICHT_ZUSTAND_EIN_ZEITBEGRENZT;
 			POWER := TRUE;
 			POWER_NO_BLINK := TRUE;
 		ELSIF ( ( TRUE = afterrunTimer.Q ) OR (TRUE =ausSofortEdge.Q) )THEN
-			blinkPulse(PT := t#250ms,N :=10, rst:=1);
+			blinker(ENABLE:=FALSE);
+			blinkCounter(RESET:=TRUE);
+
 			zustand_en := LICHT_ZUSTAND_AUS;
 			POWER := FALSE;
 			POWER_NO_BLINK := FALSE;
 		ELSE
-			POWER := ( ((blinkPulse.cnt+7) MOD 8) > 0 );
+			blinker(ENABLE:=TRUE,TIMELOW:=AFTERRUN_BLINK_LOW, TIMEHIGH:=AFTERRUN_BLINK_HIGH);
+			blinkCounter(CU:=POWER,RESET:=FALSE,PV:=AFTERRUN_NUMBER_OF_PULSES);
+			POWER := blinker.out OR blinkCounter.Q;
 			POWER_NO_BLINK := TRUE;
 		END_IF
 
@@ -106,6 +120,7 @@ END_CASE;
 
 (* Author: MacPiper
 Changelog:
+03.12.16 ver 1.2. Make blinking in afterrun configurable (AFTERRUN_BLINK_LOW; AFTERRUN_BLINK_HIGH, AFTERRUN_NUMBER_OF_PULSES)
 24.10.13 ver 1.1. Allow retrigger of on-time in afterrun state
 *)
 END_FUNCTION_BLOCK
