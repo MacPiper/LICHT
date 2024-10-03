@@ -54,10 +54,8 @@ ausSofortEdge(CLK := AUS_SOFORT );
 ausMitAnkuendigungEdge(CLK := AUS_MIT_ANGEKUENDIGUNG );
 afterrunTimer(IN := (LICHT_ZUSTAND_AUSSCHALT_WARNUNG = zustand_en), PT := AFTERRUN_TIME );
 
-IF (TRUE = RETRIGGER_ON_TIME) THEN
-	IF ( (TRUE = retriggerOnTimeEdge.Q) OR (TRUE = RETRIGGER_ON_TIME_AS_STATE) ) THEN
-		tonTimer(IN := 0, PT := ON_TIME );
-	END_IF
+IF retriggerOnTimeEdge.Q OR (RETRIGGER_ON_TIME AND RETRIGGER_ON_TIME_AS_STATE) THEN
+	tonTimer(IN := 0, PT := ON_TIME );
 ELSIF (LICHT_ZUSTAND_EIN_ZEITBEGRENZT = zustand_en) THEN
 	 tonTimer(IN := 1, PT := ON_TIME );
 	doubleClickTimer(IN := 1, PT := t#500ms );
@@ -131,6 +129,7 @@ END_CASE;
 
 (* Author: MacPiper
 Changelog:
+03.10.24 ver 1.5 fixed RETRIGGER_ON_TIME rising edge handling, it was evaluating the state instead, independant from RETRIGGER_ON_TIME_AS_STATE parameter
 12.05.20 ver 1.4 Added functionality for longtime-activation through doubleclick (set parameter DOUBLE_CLICK_DAUER_ACTIVATION to TRUE to enable it)
 26.04.17 ver 1.3 Added parameter RETRIGGER_ON_TIME_AS_STATE. When set, the timer starts to run only when the input is RETRIGGER_ON_TIME low
 03.12.16 ver 1.2. Make blinking in afterrun configurable (AFTERRUN_BLINK_LOW; AFTERRUN_BLINK_HIGH, AFTERRUN_NUMBER_OF_PULSES)
